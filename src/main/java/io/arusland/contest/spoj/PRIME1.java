@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 /**
+ * http://www.spoj.com/problems/PRIME1
+ *
  * @author Ruslan Absalyamov
  * @since 2017-09-10
  */

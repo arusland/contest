@@ -4,7 +4,7 @@ import java.io.*;
 import java.util.Arrays;
 
 /**
- * http://www.spoj.com/problems/PALIN/
+ * http://www.spoj.com/problems/PALIN
  *
  * @author Ruslan Absalyamov
  * @since 2017-09-03
