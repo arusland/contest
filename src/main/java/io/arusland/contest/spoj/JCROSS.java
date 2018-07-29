@@ -10,9 +10,9 @@ import java.io.*;
  */
 public class JCROSS {
     private final static int CELL_BLANK = 0;
-    private final static int CELL_FILLED = 1;
-    private final static int CELL_CROSS = 2;
-    private static final int CELL_DEBUG = 42;
+    private final static int CELL_CROSS = 1;
+    private final static int CELL_FILLED = 2;
+    private static final int CELL_DEBUG = 3;
 
     public static void main(String[] args) throws Exception {
         mainInternal(getInput(args));
@@ -43,78 +43,73 @@ public class JCROSS {
         int[] rowsMaxEdges = calcMaxEdges(rows, colsCount);
         int[] colsMaxEdges = calcMaxEdges(cols, rowsCount);
 
-        fillMatrixViaMaxEdgesHorizontal(matrix, rows, rowsMaxEdges);
-        fillMatrixViaMaxEdgesVertical(matrix, cols, colsMaxEdges);
+
+        boolean[] rowsDone = new boolean[rowsCount];
+        boolean[] colsDone = new boolean[colsCount];
+        fillMatrixViaMaxEdgesHorizontal(matrix, rows, rowsMaxEdges, rowsDone);
+        fillMatrixViaMaxEdgesVertical(matrix, cols, colsMaxEdges, colsDone);
 
         printMatrix(matrix);
 
-        int[][] rowsMin = calcMins(rows);
-        int[][] rowsMax = calcMaxes(rows, rowsMaxEdges);
+        int[][] rowsMin = calcMins(rows, rowsDone);
+        int[][] rowsMax = calcMaxes(rows, rowsMaxEdges, rowsDone);
 
-        // int[][] colsMin = calcMins(cols);
-        //int[][] colsMax = calcMaxes(cols, colsMaxEdges);
+        int[][] colsMin = calcMins(cols, colsDone);
+        int[][] colsMax = calcMaxes(cols, colsMaxEdges, colsDone);
 
-        fillViaMinAndMaxHorizontal(matrix, rowsMin, rowsMax);
+        fillViaMinAndMaxHorizontal(matrix, rowsMin, rowsMax, rowsDone);
+        fillViaMinAndMaxVertical(matrix, colsMin, colsMax, colsDone);
 
         System.out.println();
 
         printMatrix(matrix);
     }
 
-    private static void fillViaMinAndMaxHorizontal(int[][] matrix, int[][] rowsMin, int[][] rowsMax) {
-        for (int i = 0; i < matrix.length; i++) {
-            int[] row = matrix[i];
-            int[] rowMin = rowsMin[i];
-            int[] rowMax = rowsMax[i];
+    private static void fillViaMinAndMaxVertical(int[][] matrix, int[][] colsMin,
+                                                 int[][] colsMax, boolean[] colsDone) {
+        for (int i = 0; i < colsMin.length; i++) {
+            if (!colsDone[i]) {
+                int[] colMin = colsMin[i];
+                int[] colMax = colsMax[i];
 
-            for (int j = 0; j < rowMin.length; j++) {
-                int right = rowMin[j];
+                for (int j = 0; j < colMin.length; j++) {
+                    int bottom = colMin[j];
 
-                for (int left = rowMax[j]; left <= right; left++) {
-                    row[left - 1] = CELL_DEBUG;
+                    for (int top = colMax[j]; top <= bottom; top++) {
+                        matrix[top - 1][i] = CELL_DEBUG;
+                    }
                 }
             }
         }
     }
 
-    private static void printMatrix(int[][] matrix) {
-        System.out.print(" ");
-        for (int i = 0; i < matrix[0].length; i++) {
-            System.out.print((i + 1) % 10);
-        }
-
-        System.out.println();
-
+    private static void fillViaMinAndMaxHorizontal(int[][] matrix, int[][] rowsMin,
+                                                   int[][] rowsMax, boolean[] rowsDone) {
         for (int i = 0; i < matrix.length; i++) {
-            int[] row = matrix[i];
-            System.out.print((i + 1) % 10);
+            if (!rowsDone[i]) {
+                int[] row = matrix[i];
+                int[] rowMin = rowsMin[i];
+                int[] rowMax = rowsMax[i];
 
-            for (int j = 0; j < row.length; j++) {
-                switch (row[j]) {
-                    case CELL_BLANK:
-                        System.out.print(" ");
-                        break;
-                    case CELL_CROSS:
-                        System.out.print(".");
-                        break;
-                    case CELL_FILLED:
-                        System.out.print("#");
-                        break;
-                    case CELL_DEBUG:
-                        System.out.print("?");
-                        break;
-                    default:
-                        throw new RuntimeException("Unsupported cell value: " + row[j]);
+                for (int j = 0; j < rowMin.length; j++) {
+                    int right = rowMin[j];
+
+                    for (int left = rowMax[j]; left <= right; left++) {
+                        row[left - 1] = CELL_FILLED;
+                    }
                 }
             }
-
-            System.out.println();
         }
     }
 
-    private static void fillMatrixViaMaxEdgesHorizontal(int[][] matrix, int[][] rows, int[] rowsMaxEdges) {
+
+    private static void fillMatrixViaMaxEdgesHorizontal(int[][] matrix, int[][] rows,
+                                                        int[] rowsMaxEdges, boolean[] rowsDone) {
         for (int i = 0; i < rowsMaxEdges.length; i++) {
+            // when no max edges found
             if (rowsMaxEdges[i] == 0) {
+                // this row is done and must be skipped further
+                rowsDone[i] = true;
                 int[] row = rows[i];
                 int[] rowMatrix = matrix[i];
                 int left = 0;
@@ -136,9 +131,13 @@ public class JCROSS {
         }
     }
 
-    private static void fillMatrixViaMaxEdgesVertical(int[][] matrix, int[][] cols, int[] colsMaxEdges) {
+    private static void fillMatrixViaMaxEdgesVertical(int[][] matrix, int[][] cols,
+                                                      int[] colsMaxEdges, boolean[] colsDone) {
         for (int i = 0; i < colsMaxEdges.length; i++) {
+            // when no max edges found
             if (colsMaxEdges[i] == 0) {
+                // this row is done and must be skipped further
+                colsDone[i] = true;
                 int[] col = cols[i];
                 int top = 0;
 
@@ -185,20 +184,22 @@ public class JCROSS {
     /**
      * Calculates right/bottom edges of filled blocks shifted to the left/top
      */
-    private static int[][] calcMins(int[][] rows) {
+    private static int[][] calcMins(int[][] rows, boolean[] rowsDone) {
         int[][] rowsMin = new int[rows.length][];
 
         for (int i = 0; i < rows.length; i++) {
-            int[] row = rows[i];
-            int[] rowMin = new int[row.length];
-            int right = 0;
+            if (!rowsDone[i]) {
+                int[] row = rows[i];
+                int[] rowMin = new int[row.length];
+                int right = 0;
 
-            for (int j = 0; j < row.length; j++) {
-                rowMin[j] = right + row[j];
-                right = rowMin[j] + 1;
+                for (int j = 0; j < row.length; j++) {
+                    rowMin[j] = right + row[j];
+                    right = rowMin[j] + 1;
+                }
+
+                rowsMin[i] = rowMin;
             }
-
-            rowsMin[i] = rowMin;
         }
 
         return rowsMin;
@@ -207,20 +208,22 @@ public class JCROSS {
     /**
      * Calculates left/top edges of filled blocks shifted to the right/bottom
      */
-    private static int[][] calcMaxes(int[][] rows, int[] edgeMax) {
+    private static int[][] calcMaxes(int[][] rows, int[] edgeMax, boolean[] rowsDone) {
         int[][] rowsMax = new int[rows.length][];
 
         for (int i = 0; i < rows.length; i++) {
-            int[] row = rows[i];
-            int[] rowMax = new int[row.length];
-            int left = edgeMax[i];
+            if (!rowsDone[i]) {
+                int[] row = rows[i];
+                int[] rowMax = new int[row.length];
+                int left = edgeMax[i];
 
-            for (int j = 0; j < row.length; j++) {
-                rowMax[j] = left + 1;
-                left = rowMax[j] + row[j];
+                for (int j = 0; j < row.length; j++) {
+                    rowMax[j] = left + 1;
+                    left = rowMax[j] + row[j];
+                }
+
+                rowsMax[i] = rowMax;
             }
-
-            rowsMax[i] = rowMax;
         }
 
         return rowsMax;
@@ -244,5 +247,40 @@ public class JCROSS {
 
     private static InputStream getInput(String[] args) throws FileNotFoundException {
         return args.length > 0 ? new FileInputStream(args[0]) : System.in;
+    }
+
+    private static void printMatrix(int[][] matrix) {
+        System.out.print(" ");
+        for (int i = 0; i < matrix[0].length; i++) {
+            System.out.print((i + 1) % 10);
+        }
+
+        System.out.println();
+
+        for (int i = 0; i < matrix.length; i++) {
+            int[] row = matrix[i];
+            System.out.print((i + 1) % 10);
+
+            for (int j = 0; j < row.length; j++) {
+                switch (row[j]) {
+                    case CELL_BLANK:
+                        System.out.print(" ");
+                        break;
+                    case CELL_CROSS:
+                        System.out.print(".");
+                        break;
+                    case CELL_FILLED:
+                        System.out.print("#");
+                        break;
+                    case CELL_DEBUG:
+                        System.out.print("?");
+                        break;
+                    default:
+                        throw new RuntimeException("Unsupported cell value: " + row[j]);
+                }
+            }
+
+            System.out.println();
+        }
     }
 }
