@@ -11,6 +11,6 @@ public class JCROSS_test {
         ClassLoader classLoader = ClassLoader.getSystemClassLoader();
         InputStream stream = classLoader.getResourceAsStream("io/arusland/contest/spoj/JCROSS.txt");
 
-        JCROSS.mainInternal(stream);
+        new JCROSS().solve(stream);
     }
 }
