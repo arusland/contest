@@ -1,6 +1,7 @@
 package io.arusland.contest.spoj;
 
 import java.io.*;
+import java.util.*;
 
 /**
  * http://www.spoj.com/problems/JCROSS
@@ -9,10 +10,9 @@ import java.io.*;
  * @since 2018-07-29
  */
 public class JCROSS {
-    private final static int CELL_BLANK = 0;
-    private final static int CELL_CROSS = 1;
-    private final static int CELL_FILLED = 2;
-    private static final int CELL_DEBUG = 3;
+    private final static int BLOCK_SOLID = 1;
+    private final static int BLOCK_FREE = 2;
+    private final static int BLOCK_BLANK = 3;
 
     public static void main(String[] args) throws Exception {
         new JCROSS().solve(getInput(args));
@@ -36,163 +36,98 @@ public class JCROSS {
         String[] size = br.readLine().split(" ");
         final int rowsCount = Integer.parseInt(size[0]);
         final int colsCount = Integer.parseInt(size[1]);
-        int[][] rows = readLines(rowsCount, br);
-        int[][] cols = readLines(colsCount, br);
+        BlocksLine[] rows = readBlocks(rowsCount, br);
+        BlocksLine[] cols = readBlocks(colsCount, br);
 
         new SingleCross(rows, cols).solve();
     }
 
     private static class SingleCross {
-        private final int[][] rows;
-        private final int[][] cols;
+        private final BlocksLine[] rows;
+        private final BlocksLine[] cols;
         private final int rowsCount;
         private final int colsCount;
-        private final int[][] matrix;
-        private final boolean[] rowsDone;
-        private final boolean[] colsDone;
 
-        public SingleCross(int[][] rows, int[][] cols) {
+        public SingleCross(BlocksLine[] rows, BlocksLine[] cols) {
             this.rows = rows;
             this.cols = cols;
             this.rowsCount = rows.length;
             this.colsCount = cols.length;
-            this.matrix = new int[rowsCount][colsCount];
-            this.rowsDone = new boolean[rowsCount];
-            this.colsDone = new boolean[colsCount];
         }
 
         public void solve() {
-            int[] rowsMaxEdges = calcMaxEdges(rows, colsCount);
-            int[] colsMaxEdges = calcMaxEdges(cols, rowsCount);
+            calcMaxEdges(rows, colsCount);
+            calcMaxEdges(cols, rowsCount);
 
-            fillMatrixViaMaxEdgesHorizontal(rowsMaxEdges);
-            fillMatrixViaMaxEdgesVertical(colsMaxEdges);
+            fillMatrixViaMaxEdges(rows, cols);
+            printMatrix(rows, colsCount);
 
-            fillUpHorizontal(matrix, rows, rowsDone);
+            fillMatrixViaMaxEdges(cols, rows);
+            printMatrix(rows, colsCount);
 
-            printMatrix(matrix);
+            calcBlockCertainEdges(rows, cols);
+            printMatrix(rows, colsCount);
 
-            int[][] rowsMin = calcMins(rows, rowsDone);
-            int[][] rowsMax = calcMaxes(rows, rowsMaxEdges, rowsDone);
-
-            int[][] colsMin = calcMins(cols, colsDone);
-            int[][] colsMax = calcMaxes(cols, colsMaxEdges, colsDone);
-
-            fillViaMinAndMaxHorizontal(rowsMin, rowsMax);
-            fillViaMinAndMaxVertical(colsMin, colsMax);
-
-            System.out.println();
-
-            printMatrix(matrix);
-        }
-
-        private void fillUpHorizontal(int[][] matrix, int[][] rows, boolean[] rowsDone) {
-
-        }
-
-        private void fillViaMinAndMaxVertical(int[][] colsMin, int[][] colsMax) {
-            for (int i = 0; i < colsMin.length; i++) {
-                if (!colsDone[i]) {
-                    int[] colMin = colsMin[i];
-                    int[] colMax = colsMax[i];
-
-                    for (int j = 0; j < colMin.length; j++) {
-                        int bottom = colMin[j];
-
-                        for (int top = colMax[j]; top <= bottom; top++) {
-                            matrix[top - 1][i] = CELL_DEBUG;
-                        }
-                    }
-                }
-            }
-        }
-
-        private void fillViaMinAndMaxHorizontal(int[][] rowsMin, int[][] rowsMax) {
-            for (int i = 0; i < matrix.length; i++) {
-                if (!rowsDone[i]) {
-                    int[] row = matrix[i];
-                    int[] rowMin = rowsMin[i];
-                    int[] rowMax = rowsMax[i];
-
-                    for (int j = 0; j < rowMin.length; j++) {
-                        int right = rowMin[j];
-
-                        for (int left = rowMax[j]; left <= right; left++) {
-                            row[left - 1] = CELL_FILLED;
-                        }
-                    }
-                }
-            }
+            calcBlockCertainEdges(cols, rows);
+            printMatrix(rows, colsCount);
         }
 
         /**
-         * Calculates right/bottom edges of filled blocks shifted to the left/top
+         * Calculates certain cells of the blocks which will be filled exactly
          */
-        private static int[][] calcMins(int[][] rows, boolean[] rowsDone) {
-            int[][] rowsMin = new int[rows.length][];
+        private static void calcBlockCertainEdges(BlocksLine[] lines, BlocksLine[] another) {
+            for (int i = 0; i < lines.length; i++) {
+                BlocksLine line = lines[i];
 
-            for (int i = 0; i < rows.length; i++) {
-                if (!rowsDone[i]) {
-                    int[] row = rows[i];
-                    int[] rowMin = new int[row.length];
+                if (!line.isDone) {
+                    Block[] blocks = line.blocks;
                     int right = 0;
+                    int left = line.maxEdge;
 
-                    for (int j = 0; j < row.length; j++) {
-                        rowMin[j] = right + row[j];
-                        right = rowMin[j] + 1;
+                    for (int j = 0; j < blocks.length; j++) {
+                        Block block = blocks[j];
+
+                        if (block.type == BLOCK_SOLID) {
+                            right += block.size;
+
+                            if (left < right) {
+                                block.fill(left, right - 1);
+
+                                fillSingleBlocks(another, left, right - 1, i, BLOCK_SOLID);
+                            }
+
+                            left += block.size + 1;
+                            right += 1;
+                        }
                     }
-
-                    rowsMin[i] = rowMin;
                 }
             }
-
-            return rowsMin;
         }
 
-        /**
-         * Calculates left/top edges of filled blocks shifted to the right/bottom
-         */
-        private static int[][] calcMaxes(int[][] rows, int[] edgeMax, boolean[] rowsDone) {
-            int[][] rowsMax = new int[rows.length][];
-
-            for (int i = 0; i < rows.length; i++) {
-                if (!rowsDone[i]) {
-                    int[] row = rows[i];
-                    int[] rowMax = new int[row.length];
-                    int left = edgeMax[i];
-
-                    for (int j = 0; j < row.length; j++) {
-                        rowMax[j] = left + 1;
-                        left = rowMax[j] + row[j];
-                    }
-
-                    rowsMax[i] = rowMax;
-                }
-            }
-
-            return rowsMax;
-        }
-
-        private void fillMatrixViaMaxEdgesHorizontal(int[] rowsMaxEdges) {
-            for (int i = 0; i < rowsMaxEdges.length; i++) {
+        private static void fillMatrixViaMaxEdges(BlocksLine[] lines, BlocksLine[] another) {
+            for (int i = 0; i < lines.length; i++) {
+                BlocksLine line = lines[i];
                 // when no max edges found
-                if (rowsMaxEdges[i] == 0) {
+                if (line.maxEdge == 0) {
                     // this row is done and must be skipped further
-                    rowsDone[i] = true;
-                    int[] row = rows[i];
-                    int[] rowMatrix = matrix[i];
+                    line.isDone = true;
+                    // we must remove edge blank blocks
+                    Block[] blocks = Arrays.copyOfRange(line.blocks, 1, line.blocks.length - 1);
+                    line.blocks = blocks;
                     int left = 0;
 
-                    for (int j = 0; j < row.length; j++) {
-                        for (int k = 0; k < row[j]; k++) {
-                            rowMatrix[left + k] = CELL_FILLED;
-                        }
+                    for (int j = 0; j < blocks.length; j++) {
+                        Block block = blocks[j];
 
-                        left += row[j];
+                        if (block.type == BLOCK_SOLID) {
+                            block.fill(left, left + block.size - 1);
+                            fillSingleBlocks(another, left, left + block.size - 1, i, BLOCK_SOLID);
 
-                        if (left < rowMatrix.length) {
-                            rowMatrix[left] = CELL_CROSS;
-                            // between filled blocks must be cross
+                            left += block.size;
+                        } else {
+                            block.fill(left, left);
+                            another[left].fillSingle(i, BLOCK_BLANK);
+
                             left += 1;
                         }
                     }
@@ -200,67 +135,54 @@ public class JCROSS {
             }
         }
 
-        private void fillMatrixViaMaxEdgesVertical(int[] colsMaxEdges) {
-            for (int i = 0; i < colsMaxEdges.length; i++) {
-                // when no max edges found
-                if (colsMaxEdges[i] == 0) {
-                    // this row is done and must be skipped further
-                    colsDone[i] = true;
-                    int[] col = cols[i];
-                    int top = 0;
-
-                    for (int j = 0; j < col.length; j++) {
-                        for (int k = 0; k < col[j]; k++) {
-                            matrix[top + k][i] = CELL_FILLED;
-                        }
-
-                        top += col[j];
-
-                        if (top < matrix.length) {
-                            matrix[top][i] = CELL_CROSS;
-                            // between filled blocks must be cross
-                            top += 1;
-                        }
-                    }
-                }
+        private static void fillSingleBlocks(BlocksLine[] lines, int start, int end, int singleIndex, int type) {
+            for (int i = start; i <= end; i++) {
+                BlocksLine line = lines[i];
+                line.fillSingle(singleIndex, type);
             }
         }
 
         /**
-         * Calculates maximum size of right/left side
+         * Calculates maximum size of right/left blank block
          */
-        private static int[] calcMaxEdges(int[][] rows, int cols) {
-            int[] maxEdges = new int[rows.length];
-
-            for (int i = 0; i < maxEdges.length; i++) {
-                int[] row = rows[i];
+        private static void calcMaxEdges(BlocksLine[] lines, int maxSize) {
+            for (int i = 0; i < lines.length; i++) {
+                BlocksLine line = lines[i];
+                Block[] blocks = lines[i].blocks;
                 int sum = 0;
 
-                for (int j = 0; j < row.length; j++) {
-                    sum += row[j];
+                for (int j = 0; j < blocks.length; j++) {
+                    Block block = blocks[j];
+
+                    if (block.type == BLOCK_SOLID) {
+                        sum += block.size;
+                    }
                 }
 
-                int empty = cols - sum;
-                int minEmptyBlock = row.length - 1;
+                int emptySize = maxSize - sum;
+                int minEmptyBlock = line.solidCount - 1;
 
-                maxEdges[i] = empty > minEmptyBlock ? empty - minEmptyBlock : 0;
+                line.maxEdge = emptySize > minEmptyBlock ? emptySize - minEmptyBlock : 0;
             }
-
-            return maxEdges;
         }
     }
 
-    private static int[][] readLines(int count, BufferedReader br) throws IOException {
-        int[][] data = new int[count][];
+    private static BlocksLine[] readBlocks(int count, BufferedReader br) throws IOException {
+        BlocksLine[] data = new BlocksLine[count];
 
         for (int i = 0; i < count; i++) {
             String[] line = br.readLine().split(" ");
-            int[] values = new int[line.length - 1];
+            int solidCount = line.length - 1;
+            Block[] blocks = new Block[solidCount * 2 + 1];
+            int idx = 0;
+            blocks[idx++] = Block.ofBlank();
 
-            for (int j = 0; j < values.length; j++) {
-                values[j] = Integer.parseInt(line[j]);
+            for (int j = 0; j < solidCount; j++) {
+                blocks[idx++] = Block.ofSolid(Integer.parseInt(line[j]));
+                blocks[idx++] = Block.ofBlank();
             }
-            data[i] = values;
+
+            data[i] = new BlocksLine(blocks, solidCount);
         }
 
         return data;
@@ -270,38 +192,136 @@ public class JCROSS {
         return args.length > 0 ? new FileInputStream(args[0]) : System.in;
     }
 
-    private static void printMatrix(int[][] matrix) {
+    private static void printMatrix(BlocksLine[] lines, int lineSize) {
         System.out.print(" ");
-        for (int i = 0; i < matrix[0].length; i++) {
+        for (int i = 0; i < lineSize; i++) {
             System.out.print((i + 1) % 10);
         }
 
         System.out.println();
 
-        for (int i = 0; i < matrix.length; i++) {
-            int[] row = matrix[i];
+        for (int i = 0; i < lines.length; i++) {
+            BlocksLine line = lines[i];
             System.out.print((i + 1) % 10);
 
-            for (int j = 0; j < row.length; j++) {
-                switch (row[j]) {
-                    case CELL_BLANK:
-                        System.out.print(" ");
-                        break;
-                    case CELL_CROSS:
-                        System.out.print(".");
-                        break;
-                    case CELL_FILLED:
-                        System.out.print("#");
-                        break;
-                    case CELL_DEBUG:
-                        System.out.print("?");
-                        break;
-                    default:
-                        throw new RuntimeException("Unsupported cell value: " + row[j]);
+            for (int j = 0; j < lineSize; j++) {
+                Block block = line.findBlock(j);
+
+                if (block != null) {
+                    System.out.print(getBlockChar(block.type));
+                } else {
+                    Integer type = line.singles.get(j);
+
+                    if (type != null) {
+                        System.out.print(getBlockCharSingle(type));
+                    } else {
+                        System.out.print('?');
+                    }
                 }
             }
+            System.out.print(line.isDone ? '!' : '|');
 
             System.out.println();
+        }
+
+        System.out.println();
+    }
+
+    private static Character getBlockChar(int type) {
+        switch (type) {
+            case BLOCK_BLANK:
+                return '.';
+            case BLOCK_SOLID:
+                return '#';
+            case BLOCK_FREE:
+                return '$';
+            default:
+                throw new RuntimeException("Unsupported block type: " + type);
+        }
+    }
+
+    private static Character getBlockCharSingle(int type) {
+        switch (type) {
+            case BLOCK_BLANK:
+                return ':';
+            case BLOCK_SOLID:
+                return '@';
+            case BLOCK_FREE:
+                return '%';
+            default:
+                throw new RuntimeException("Unsupported block type: " + type);
+        }
+    }
+
+    /**
+     * Separate block.
+     * <p>
+     * BLANK - not filled block
+     * SOLID - filled block
+     * FREE - filled block, but it's unknown
+     * to which solid block belongs (left or right)
+     */
+    static class Block {
+        int type;
+        int start;
+        int end;
+        int size;
+
+        Block(int type, int start, int end, int size) {
+            this.type = type;
+            this.start = start;
+            this.end = end;
+            this.size = size;
+        }
+
+        static Block ofBlank() {
+            return new Block(BLOCK_BLANK, -1, -1, 1);
+        }
+
+        static Block ofSolid(int size) {
+            return new Block(BLOCK_SOLID, -1, -1, size);
+        }
+
+        static Block ofFree(int size) {
+            return new Block(BLOCK_FREE, -1, -1, size);
+        }
+
+        public void fill(int start, int end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        @Override
+        public String toString() {
+            return "Block{" +
+                    "type=" + type +
+                    ", start=" + start +
+                    ", end=" + end +
+                    ", size=" + size +
+                    '}';
+        }
+    }
+
+    static class BlocksLine {
+        public int maxEdge;
+        Block[] blocks;
+        final int solidCount;
+        boolean isDone;
+        final Map<Integer, Integer> singles = new HashMap<>();
+
+        public BlocksLine(Block[] blocks, int solidCount) {
+            this.blocks = blocks;
+            this.solidCount = solidCount;
+        }
+
+        Block findBlock(int index) {
+            return Arrays.stream(blocks)
+                    .filter(p -> index >= p.start && index <= p.end)
+                    .findAny().orElse(null);
+        }
+
+        public void fillSingle(int singleIndex, int type) {
+            singles.put(singleIndex, type);
         }
     }
 }
